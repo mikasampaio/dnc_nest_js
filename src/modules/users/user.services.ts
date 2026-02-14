@@ -1,63 +1,96 @@
-import { Delete, Get, HttpException, HttpStatus, Injectable, Patch, Post } from "@nestjs/common";
-import { PrismaService } from "../prisma/prisma.service";
-import type { UserCreateInput, UserUpdateInput } from "src/generated/prisma/models";
-import type { User } from "src/generated/prisma/client";
+import {
+  HttpException,
+  HttpStatus,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+
+import type { User } from 'src/generated/prisma/client';
+import * as bcrypt from 'bcrypt';
+import { CreateUserDTO, UpdateUserDTO } from './dtos/user.dtos';
 
 @Injectable()
 export class UserService {
-    constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
-    @Get()
-    getUsers() {
-        return this.prisma.user.findMany({
-            omit: { password: true }
-        });
+  getUsers(): Promise<Omit<User, 'password'>[]> {
+    return this.prisma.user.findMany({
+      omit: { password: true },
+    });
+  }
+
+  getById(id: number): Promise<Omit<User, 'password'>> {
+    const user = this.findUserById(id);
+
+    return user;
+  }
+
+  async createUser(data: CreateUserDTO): Promise<User> {
+    const user = await this.prisma.user.findFirst({
+      where: {
+        OR: [{ email: data.email }, { username: data.username }],
+      },
+    });
+
+    if (user) {
+      if (user.email === data.email) {
+        throw new HttpException('Email already in use', HttpStatus.BAD_REQUEST);
+      }
+
+      if (user.username === data.username) {
+        throw new HttpException(
+          'Username already in use',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
     }
 
-    @Get(':id')
-    getById(id: number) {
-        const user = this.prisma.user.findUnique({
-            where: { id },
-            omit: { password: true }
-        })
+    const hashedPassword = await bcrypt.hash(data.password, 10);
 
-        if (!user) throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+    data.password = hashedPassword;
 
-        return user;
+    return this.prisma.user.create({
+      data: {
+        ...data,
+        createdAt: new Date(),
+      },
+    });
+  }
+
+  async updateUser(id: number, data: UpdateUserDTO): Promise<User> {
+    await this.findUserById(id);
+
+    if (data.password) {
+      const hashedPassword = await bcrypt.hash(data.password, 10);
+      data.password = hashedPassword;
     }
 
-    @Post()
-    async createUser(data: UserCreateInput): Promise<User> {
-        const user = await this.prisma.user.findUnique({
-            where: { email: data.email, username: data.username, },
-        })
+    return await this.prisma.user.update({
+      where: { id },
+      data: {
+        ...data,
+        updatedAt: new Date(),
+      },
+    });
+  }
 
-        if (user) throw new HttpException('User already exists', HttpStatus.BAD_REQUEST);
+  async deleteUser(id: number): Promise<void> {
+    await this.findUserById(id);
 
-        return this.prisma.user.create({
-            data: {
-                ...data,
-                createdAt: new Date(),
-            }
-        })
-    }
+    await this.prisma.user.delete({
+      where: { id },
+    });
+  }
 
-    @Patch(':id')
-    updateUser(id: number, data: UserUpdateInput): Promise<User> {
-        return this.prisma.user.update({
-            where: { id },
-            data: {
-                ...data,
-                updatedAt: new Date(),
-            }
-        })
-    }
+  private async findUserById(id: number): Promise<Omit<User, 'password'>> {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      omit: { password: true },
+    });
 
-    @Delete(':id')
-    async deleteUser(id: number): Promise<void> {
-        await this.prisma.user.delete({
-            where: { id }
+    if (!user) throw new NotFoundException('User not found');
 
-        })
-    }
+    return user;
+  }
 }
