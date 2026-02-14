@@ -1,36 +1,44 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put } from "@nestjs/common";
-import { UserService } from "./user.services";
-import type { UserCreateInput, UserUpdateInput } from "src/generated/prisma/models";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Post,
+  Put,
+  UseInterceptors,
+} from '@nestjs/common';
+import { UserService } from './user.services';
+import { CreateUserDTO, UpdateUserDTO } from './dtos/user.dtos';
+import { LoggingInterceptor } from 'src/shared/interceptors/logging.interceptor';
+import { ParamsId } from 'src/shared/decorators/params.decorator';
 
+@UseInterceptors(LoggingInterceptor)
 @Controller('users')
 export class UserController {
-    constructor(private readonly userService: UserService) {
+  constructor(private readonly userService: UserService) {}
 
-    }
+  @Get()
+  getUsers() {
+    return this.userService.getUsers();
+  }
 
-    @Get()
-    getUsers() {
-        return this.userService.getUsers();
-    }
+  @Get(':id')
+  getById(@ParamsId() id: number) {
+    return this.userService.getById(Number(id));
+  }
 
-    @Get(':id')
-    getById(@Param('id') id: number) {
-        return this.userService.getById(Number(id));
-    }
+  @Post()
+  async createUser(@Body() body: CreateUserDTO) {
+    return await this.userService.createUser(body);
+  }
 
+  @Put(':id')
+  updateUser(@ParamsId() id: number, @Body() body: UpdateUserDTO) {
+    return this.userService.updateUser(Number(id), body);
+  }
 
-    @Post()
-    async createUser(@Body() body: UserCreateInput) {
-        return await this.userService.createUser(body);
-    }
-
-    @Patch(':id')
-    async updateUser(@Param('id') id: number, @Body() UserUpdateInput) {
-        return await this.userService.updateUser(Number(id), UserUpdateInput);
-    }
-
-    @Delete(':id')
-    async deleteUser(@Param('id') id: number) {
-        return await this.userService.deleteUser(Number(id));
-    }
+  @Delete(':id')
+  async deleteUser(@ParamsId() id: number) {
+    return await this.userService.deleteUser(Number(id));
+  }
 }
