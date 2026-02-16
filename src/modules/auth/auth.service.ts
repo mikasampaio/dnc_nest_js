@@ -1,15 +1,15 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { User } from '@prisma/client';
 import { LoginDTO, AuthRegisterDTO } from './domain/dtos/auth.dtos';
-import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
+import { User } from '../users/entities/user.entity';
+import { UserService } from '../users/user.services';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly jwtService: JwtService,
-    private readonly prisma: PrismaService,
+    private readonly userService: UserService,
   ) {}
 
   async generateToken(user: User) {
@@ -22,12 +22,26 @@ export class AuthService {
     });
   }
 
+  async verifyToken(token: string) {
+    try {
+      const decoded = await this.jwtService.verifyAsync<{
+        sub: string;
+        username: string;
+      }>(token, {
+        secret: process.env.JWT_SECRET_KEY,
+        issuer: 'dnc-nest-js',
+        audience: 'dnc-users',
+      });
+
+      return { valid: true, decoded };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return { valid: false, message };
+    }
+  }
+
   async login({ email, password }: LoginDTO) {
-    const user = await this.prisma.user.findUnique({
-      where: {
-        email,
-      },
-    });
+    const user = await this.userService.findByEmail(email);
 
     if (!user || !(await bcrypt.compare(password, user.password))) {
       throw new UnauthorizedException('Invalid email or password');
@@ -42,20 +56,15 @@ export class AuthService {
   }
 
   async register(data: AuthRegisterDTO) {
-    const user = await this.prisma.user.findFirst({
-      where: {
-        OR: [{ email: data.email }, { username: data.username }],
-      },
-    });
+    const email = await this.userService.findByEmail(data.email);
+    const username = await this.userService.findByUsername(data.username);
 
-    if (user) {
-      if (user.email === data.email) {
-        throw new UnauthorizedException('Email already in use');
-      }
+    if (email) {
+      throw new UnauthorizedException('Email already in use');
+    }
 
-      if (user.username === data.username) {
-        throw new UnauthorizedException('Username already in use');
-      }
+    if (username) {
+      throw new UnauthorizedException('Username already in use');
     }
 
     if (data.password) {
@@ -64,16 +73,12 @@ export class AuthService {
       data.password = hashedPassword;
     }
 
-    const createdUser = await this.prisma.user.create({
-      data: {
-        ...data,
-        createdAt: new Date(),
-      },
+    const createdUser = await this.userService.createUser({
+      ...data,
     });
 
     return {
       id: createdUser.id,
-      name: createdUser.name,
       username: createdUser.username,
       email: createdUser.email,
       access_token: await this.generateToken(createdUser),
