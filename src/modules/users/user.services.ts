@@ -4,19 +4,22 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
 
-import type { User } from 'src/generated/prisma/client';
 import * as bcrypt from 'bcrypt';
 import { CreateUserDTO, UpdateUserDTO } from './dtos/user.dtos';
+import { User } from './entities/user.entity';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 
 @Injectable()
 export class UserService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    @InjectRepository(User) private readonly userRepository: Repository<User>,
+  ) {}
 
   getUsers(): Promise<Omit<User, 'password'>[]> {
-    return this.prisma.user.findMany({
-      omit: { password: true },
+    return this.userRepository.find({
+      select: ['id', 'username', 'email', 'createdAt', 'updatedAt'],
     });
   }
 
@@ -27,10 +30,13 @@ export class UserService {
   }
 
   async createUser(data: CreateUserDTO): Promise<User> {
-    const user = await this.prisma.user.findFirst({
-      where: {
-        OR: [{ email: data.email }, { username: data.username }],
-      },
+    const user = await this.userRepository.findOne({
+      where: [
+        {
+          email: data.email,
+          username: data.username,
+        },
+      ],
     });
 
     if (user) {
@@ -50,11 +56,9 @@ export class UserService {
 
     data.password = hashedPassword;
 
-    return this.prisma.user.create({
-      data: {
-        ...data,
-        createdAt: new Date(),
-      },
+    return this.userRepository.save({
+      ...data,
+      createdAt: new Date(),
     });
   }
 
@@ -66,31 +70,41 @@ export class UserService {
       data.password = hashedPassword;
     }
 
-    return await this.prisma.user.update({
-      where: { id },
-      data: {
-        ...data,
-        updatedAt: new Date(),
-      },
+    await this.userRepository.update(id, {
+      ...data,
+      updatedAt: new Date(),
     });
+
+    const updatedUser = await this.userRepository.findOne({
+      where: { id },
+      select: ['id', 'username', 'email', 'createdAt', 'updatedAt'],
+    });
+
+    return updatedUser!;
   }
 
   async deleteUser(id: number): Promise<void> {
     await this.findUserById(id);
 
-    await this.prisma.user.delete({
-      where: { id },
-    });
+    await this.userRepository.delete(id);
   }
 
   private async findUserById(id: number): Promise<Omit<User, 'password'>> {
-    const user = await this.prisma.user.findUnique({
+    const user = await this.userRepository.findOne({
       where: { id },
-      omit: { password: true },
+      select: ['id', 'username', 'email', 'createdAt', 'updatedAt'],
     });
 
     if (!user) throw new NotFoundException('User not found');
 
     return user;
+  }
+
+  async findByUsername(username: string): Promise<User | null> {
+    return this.userRepository.findOne({ where: { username } });
+  }
+
+  async findByEmail(email: string): Promise<User | null> {
+    return this.userRepository.findOne({ where: { email } });
   }
 }

@@ -6,13 +6,14 @@ import {
 } from '@nestjs/common';
 import { UserController } from './user.controllers';
 import { UserService } from './user.services';
-import { PrismaModule } from '../prisma/prisma.module';
 import { LoggerMiddleware } from 'src/shared/middlewares/userId.middleware';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { User } from './entities/user.entity';
 
 @Module({
   providers: [UserService],
   controllers: [UserController],
-  imports: [PrismaModule],
+  imports: [TypeOrmModule.forFeature([User])],
   exports: [UserService],
 })
 export class UserModule implements NestModule {
