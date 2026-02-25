@@ -12,7 +12,7 @@ export class AuthService {
     private readonly userService: UserService,
   ) {}
 
-  async generateToken(user: User) {
+  async generateToken(user: Pick<User, 'id' | 'username'>): Promise<string> {
     const payload = { sub: user.id, username: user.username };
 
     return await this.jwtService.signAsync(payload, {

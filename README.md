@@ -85,7 +85,7 @@ DB_USERNAME=root
 DB_PASSWORD=sua_senha_aqui
 DB_DATABASE=dnc_nest_js
 
-JWT_SECRET="2e65b84aa32bf0f74599ed9e9fa8574a9a2cbd05"
+JWT_SECRET_KEY="2e65b84aa32bf0f74599ed9e9fa8574a9a2cbd05"
 
 PORT=3000
 ```

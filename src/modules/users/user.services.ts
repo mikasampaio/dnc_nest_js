@@ -29,14 +29,9 @@ export class UserService {
     return user;
   }
 
-  async createUser(data: CreateUserDTO): Promise<User> {
+  async createUser(data: CreateUserDTO): Promise<Omit<User, 'password'>> {
     const user = await this.userRepository.findOne({
-      where: [
-        {
-          email: data.email,
-          username: data.username,
-        },
-      ],
+      where: [{ email: data.email }, { username: data.username }],
     });
 
     if (user) {
@@ -56,13 +51,25 @@ export class UserService {
 
     data.password = hashedPassword;
 
-    return this.userRepository.save({
+    const newUser = await this.userRepository.save({
       ...data,
       createdAt: new Date(),
     });
+
+    return {
+      id: newUser.id,
+      username: newUser.username,
+      email: newUser.email,
+      createdAt: newUser.createdAt,
+      updatedAt: newUser.updatedAt,
+      name: newUser.name,
+    };
   }
 
-  async updateUser(id: number, data: UpdateUserDTO): Promise<User> {
+  async updateUser(
+    id: number,
+    data: UpdateUserDTO,
+  ): Promise<Omit<User, 'password'>> {
     await this.findUserById(id);
 
     if (data.password) {
@@ -77,7 +84,7 @@ export class UserService {
 
     const updatedUser = await this.userRepository.findOne({
       where: { id },
-      select: ['id', 'username', 'email', 'createdAt', 'updatedAt'],
+      select: ['id', 'username', 'email', 'createdAt', 'updatedAt', 'name'],
     });
 
     return updatedUser!;
@@ -92,7 +99,7 @@ export class UserService {
   private async findUserById(id: number): Promise<Omit<User, 'password'>> {
     const user = await this.userRepository.findOne({
       where: { id },
-      select: ['id', 'username', 'email', 'createdAt', 'updatedAt'],
+      select: ['id', 'username', 'email', 'createdAt', 'updatedAt', 'name'],
     });
 
     if (!user) throw new NotFoundException('User not found');
